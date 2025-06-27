@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Delhi Metro Route Finder</title>
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        background-color: #121212;
+        color: #e0e0e0;
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 1000px;
+        margin: auto;
+        background: #1e1e1e;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.05);
+      }
+      h2 {
+        text-align: center;
+        margin-bottom: 30px;
+        color: #00d1b2;
+        font-size: 1.5rem;
+      }
+      select,
+      button {
+        width: 100%;
+        padding: 12px;
+        margin: 10px 0;
+        font-size: 1rem;
+        border-radius: 5px;
+        background-color: #2c2c2c;
+        color: #e0e0e0;
+        border: 1px solid #444;
+        box-sizing: border-box;
+      }
+      button {
+        background-color: #00d1b2;
+        color: #000;
+        border: none;
+        font-weight: bold;
+      }
+      button:hover {
+        background-color: #00b89c;
+      }
+      #output {
+        padding: 15px;
+        background: #2c2c2c;
+        margin-top: 20px;
+        border-radius: 5px;
+        font-size: 1rem;
+        color: #fff;
+      }
+      .map {
+        position: relative;
+        width: 100%;
+        height: 600px;
+        background: #1a1a1a;
+        margin-top: 30px;
+        border: 1px solid #333;
+        overflow: hidden;
+      }
+
+      @media (max-width: 600px) {
+        .map {
+          height: 400px;
+          overflow: auto; /* ✅ allows scrolling if content too tall */
+        }
+      }
+
+      .dot {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        background-color: #00d1b2;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 3;
+      }
+      .station {
+        position: absolute;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        font-size: 0.75rem;
+        padding: 2px 6px;
+        border-radius: 5px;
+        transform: translate(-50%, -50%);
+        z-index: 2;
+        pointer-events: none;
+        white-space: nowrap;
+      }
+      .line {
+        position: absolute;
+        height: 4px;
+        z-index: 1;
+      }
+      .red {
+        background: red;
+      }
+      .blue {
+        background: blue;
+      }
+      .yellow {
+        background: yellow;
+      }
+      .green {
+        background: green;
+      }
+      .violet {
+        background: violet;
+      }
+      .orange {
+        background: orange;
+      }
+      .blink {
+        animation: blink 1s infinite alternate;
+      }
+      @keyframes blink {
+        from {
+          background-color: #00d1b2;
+        }
+        to {
+          background-color: #ff4081;
+        }
+      }
+
+      /* Media Query for Mobile Screens */
+      @media (max-width: 600px) {
+        h2 {
+          font-size: 1.2rem;
+        }
+        select,
+        button {
+          font-size: 0.95rem;
+          padding: 10px;
+        }
+        #output {
+          font-size: 0.9rem;
+        }
+        .station {
+          font-size: 0.65rem;
+          padding: 2px 4px;
+        }
+        .map {
+          height: 50vh;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Delhi Metro Route Finder 🚇</h2>
+      <label>Source Station:</label>
+      <select id="source"></select>
+      <label>Destination Station:</label>
+      <select id="destination"></select>
+      <button onclick="findRoute('fare')">🚆 Least Fare Route</button>
+      <button onclick="findRoute('time')">⏱️ Least Time Route</button>
+      <div id="output"></div>
+      <div class="map" id="map"></div>
+    </div>
+    <script>
+      const stations = {
+        "Rajiv Chowk": { x: 300, y: 150 },
+        "Kashmere Gate": { x: 400, y: 50 },
+        "Central Secretariat": { x: 300, y: 250 },
+        AIIMS: { x: 400, y: 250 },
+        "Lajpat Nagar": { x: 500, y: 250 },
+        "Hauz Khas": { x: 550, y: 300 },
+        Saket: { x: 550, y: 400 },
+        Chattarpur: { x: 550, y: 500 },
+        Dwarka: { x: 100, y: 250 },
+        Janakpuri: { x: 150, y: 300 },
+        "Tilak Nagar": { x: 180, y: 350 },
+        Inderlok: { x: 200, y: 100 },
+        Pitampura: { x: 150, y: 50 },
+        Rohini: { x: 100, y: 30 },
+        "Noida City Centre": { x: 600, y: 150 },
+        "Botanical Garden": { x: 650, y: 200 },
+        Akshardham: { x: 550, y: 100 },
+        "Preet Vihar": { x: 580, y: 80 },
+        "Yamuna Bank": { x: 500, y: 50 },
+        "Anand Vihar": { x: 650, y: 50 },
+      };
+      const graph = {
+        "Rajiv Chowk": [
+          { to: "Central Secretariat", time: 5, fare: 10, color: "yellow" },
+          { to: "Kashmere Gate", time: 8, fare: 15, color: "blue" },
+          { to: "Inderlok", time: 6, fare: 10, color: "green" },
+          { to: "Janakpuri", time: 12, fare: 20, color: "blue" },
+        ],
+        "Central Secretariat": [
+          { to: "AIIMS", time: 7, fare: 10, color: "green" },
+          { to: "Rajiv Chowk", time: 5, fare: 10, color: "yellow" },
+        ],
+        AIIMS: [
+          { to: "Lajpat Nagar", time: 6, fare: 8, color: "yellow" },
+          { to: "Hauz Khas", time: 5, fare: 7, color: "green" },
+          { to: "Central Secretariat", time: 7, fare: 10, color: "green" },
+        ],
+        "Lajpat Nagar": [
+          { to: "Hauz Khas", time: 6, fare: 9, color: "blue" },
+          { to: "Noida City Centre", time: 15, fare: 20, color: "blue" },
+          { to: "AIIMS", time: 6, fare: 8, color: "yellow" },
+        ],
+        "Kashmere Gate": [
+          { to: "Akshardham", time: 12, fare: 18, color: "blue" },
+          { to: "Inderlok", time: 6, fare: 10, color: "red" },
+          { to: "Rajiv Chowk", time: 8, fare: 15, color: "blue" },
+        ],
+        "Hauz Khas": [
+          { to: "Saket", time: 7, fare: 10, color: "yellow" },
+          { to: "AIIMS", time: 5, fare: 7, color: "green" },
+          { to: "Lajpat Nagar", time: 6, fare: 9, color: "blue" },
+        ],
+        Saket: [
+          { to: "Chattarpur", time: 5, fare: 8, color: "green" },
+          { to: "Hauz Khas", time: 7, fare: 10, color: "yellow" },
+        ],
+        Chattarpur: [{ to: "Saket", time: 5, fare: 8, color: "green" }],
+        Dwarka: [{ to: "Janakpuri", time: 6, fare: 10, color: "blue" }],
+        Janakpuri: [
+          { to: "Tilak Nagar", time: 4, fare: 6, color: "blue" },
+          { to: "Rajiv Chowk", time: 12, fare: 20, color: "blue" },
+          { to: "Dwarka", time: 6, fare: 10, color: "blue" },
+        ],
+        "Tilak Nagar": [{ to: "Janakpuri", time: 4, fare: 6, color: "blue" }],
+        Inderlok: [
+          { to: "Pitampura", time: 5, fare: 7, color: "red" },
+          { to: "Rajiv Chowk", time: 6, fare: 10, color: "green" },
+          { to: "Kashmere Gate", time: 6, fare: 10, color: "red" },
+        ],
+        Pitampura: [
+          { to: "Rohini", time: 4, fare: 5, color: "red" },
+          { to: "Inderlok", time: 5, fare: 7, color: "red" },
+        ],
+        Rohini: [{ to: "Pitampura", time: 4, fare: 5, color: "red" }],
+        "Noida City Centre": [
+          { to: "Botanical Garden", time: 5, fare: 6, color: "blue" },
+          { to: "Preet Vihar", time: 8, fare: 10, color: "blue" },
+          { to: "Lajpat Nagar", time: 15, fare: 20, color: "blue" },
+        ],
+        "Botanical Garden": [
+          { to: "Noida City Centre", time: 5, fare: 6, color: "blue" },
+        ],
+        Akshardham: [
+          { to: "Yamuna Bank", time: 4, fare: 6, color: "blue" },
+          { to: "Kashmere Gate", time: 12, fare: 18, color: "blue" },
+        ],
+        "Preet Vihar": [
+          { to: "Anand Vihar", time: 5, fare: 7, color: "blue" },
+          { to: "Noida City Centre", time: 8, fare: 10, color: "blue" },
+          { to: "Yamuna Bank", time: 4, fare: 5, color: "blue" },
+        ],
+        "Yamuna Bank": [
+          { to: "Preet Vihar", time: 4, fare: 5, color: "blue" },
+          { to: "Akshardham", time: 4, fare: 6, color: "blue" },
+        ],
+        "Anand Vihar": [{ to: "Preet Vihar", time: 5, fare: 7, color: "blue" }],
+      };
+
+      const sourceSelect = document.getElementById("source");
+      const destinationSelect = document.getElementById("destination");
+      Object.keys(stations).forEach((station) => {
+        sourceSelect.add(new Option(station, station));
+        destinationSelect.add(new Option(station, station));
+      });
+
+      function drawMap(path = []) {
+        const map = document.getElementById("map");
+        map.innerHTML = "";
+        for (let from in graph) {
+          graph[from].forEach((edge) => {
+            const to = edge.to;
+            const div = document.createElement("div");
+            div.className = `line ${edge.color}`;
+            const x1 = stations[from].x;
+            const y1 = stations[from].y;
+            const x2 = stations[to].x;
+            const y2 = stations[to].y;
+            const length = Math.hypot(x2 - x1, y2 - y1);
+            const angle = (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI;
+            div.style.width = length + "px";
+            div.style.left = x1 + "px";
+            div.style.top = y1 + "px";
+            div.style.transformOrigin = "0 0";
+            div.style.transform = `rotate(${angle}deg)`;
+            map.appendChild(div);
+          });
+        }
+        for (let station in stations) {
+          const dot = document.createElement("div");
+          dot.className = "dot";
+          dot.style.left = stations[station].x + "px";
+          dot.style.top = stations[station].y + "px";
+          map.appendChild(dot);
+
+          const label = document.createElement("div");
+          label.className = "station";
+          label.textContent = station;
+          label.style.left = stations[station].x + 12 + "px";
+          label.style.top = stations[station].y - 12 + "px";
+          if (path.includes(station)) label.classList.add("blink");
+          map.appendChild(label);
+        }
+      }
+
+      function dijkstra(start, end, type) {
+        const dist = {},
+          prev = {},
+          visited = new Set();
+        Object.keys(stations).forEach((s) => {
+          dist[s] = Infinity;
+          prev[s] = null;
+        });
+        dist[start] = 0;
+        const pq = new Set(Object.keys(stations));
+        while (pq.size) {
+          let u = [...pq].reduce((a, b) => (dist[a] < dist[b] ? a : b));
+          pq.delete(u);
+          if (u === end) break;
+          for (let edge of graph[u] || []) {
+            if (!pq.has(edge.to)) continue;
+            let alt = dist[u] + edge[type];
+            if (alt < dist[edge.to]) {
+              dist[edge.to] = alt;
+              prev[edge.to] = u;
+            }
+          }
+        }
+        const path = [];
+        for (let u = end; u; u = prev[u]) path.unshift(u);
+        return { path, total: dist[end] };
+      }
+
+      function findRoute(type) {
+        const src = sourceSelect.value;
+        const dst = destinationSelect.value;
+        if (src === dst) {
+          document.getElementById("output").innerHTML =
+            "Source and destination cannot be the same.";
+          return;
+        }
+        const result = dijkstra(src, dst, type);
+        document.getElementById(
+          "output"
+        ).innerHTML = `<b>Path:</b> ${result.path.join(" → ")}<br><b>Total ${
+          type === "fare" ? "Fare" : "Time"
+        }:</b> ${result.total} ${type === "fare" ? "₹" : "mins"}`;
+        drawMap(result.path);
+      }
+
+      drawMap();
+    </script>
+  </body>
+</html>
